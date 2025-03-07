@@ -4,25 +4,52 @@ import plotly.express as px
 import os
 import warnings
 import datetime
-import plotly.graph_objects as go
-import numpy as np
-import seaborn as sns
-
-warnings.filterwarnings("ignore")
-import matplotlib.pyplot as plt
-import scipy.stats as stats
-from PIL import Image
 import plotly.figure_factory as ff
 from sklearn.preprocessing import LabelEncoder
 import io
 import base64
 from ydata_profiling import ProfileReport
-import sweetviz as sv
 from fpdf import FPDF
 from assets.css import set_custom_style
 import tempfile
-import webbrowser
 import markdownify
+from sweet import generate_sweetviz_report, get_download_link_sweet
+import numpy as np
+from ML import Machine_Learning
+
+
+def generate_autoeda_report(df):
+    """
+    Generates an AutoEDA report using ydata-profiling and returns the report's HTML content.
+    """
+    # Generate the profile report
+    profile = ProfileReport(df, explorative=True)
+
+    # Create a temporary HTML file to store the report
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".html") as tmp:
+        temp_file_name = tmp.name
+        profile.to_file(temp_file_name)
+
+    # Read the HTML content from the file
+    with open(temp_file_name, "r", encoding="utf-8") as f:
+        html_content = f.read()
+
+    return html_content
+
+
+def get_download_link_autoeda(content, filename, ext):
+    """
+    Generates a download link for the AutoEDA report.
+    """
+    b64 = base64.b64encode(content.encode()).decode()
+    return f'<a href="data:file/{ext};base64,{b64}" download="{filename}.{ext}">Download Report</a>'
+
+
+if not hasattr(np, "VisibleDeprecationWarning"):
+    np.VisibleDeprecationWarning = DeprecationWarning
+
+
+warnings.filterwarnings("ignore")
 
 
 def area_chart(df, selected_column, col2):
@@ -335,25 +362,6 @@ def generate_autoeda_report(df, filename="autoeda_report"):
     return {"html": report_html, "title": "AutoEDA Data Analysis Report"}
 
 
-def generate_sweetviz_report(df, filename="sweetviz_report"):
-    """Generate a report using Sweetviz library"""
-    # Create Sweetviz report
-    report = sv.analyze(df)
-
-    # Save report to a temporary file
-    temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".html")
-    report.show_html(filepath=temp_file.name, open_browser=False)
-
-    # Read the HTML file
-    with open(temp_file.name, "r", encoding="utf-8") as f:
-        html_content = f.read()
-
-    # Clean up
-    os.unlink(temp_file.name)
-
-    return {"html": html_content, "title": "Sweetviz Data Analysis Report"}
-
-
 def generate_custom_report(df, selected_sections, filename="custom_report"):
     """Generate a custom report with user-selected sections"""
     html_content = f"""
@@ -635,7 +643,7 @@ def main():
     set_custom_style()
 
     st.markdown(
-        '<h1 class="main-header">Advanced Data Analysis Dashboard</h1>',
+        '<h1 class="main-header">Data Science Suite</h1>',
         unsafe_allow_html=True,
     )
 
@@ -721,11 +729,8 @@ def main():
         tabs = st.tabs(
             [
                 "DashBoard",
-                "Univariate Analysis",
-                "Bivariate Analysis",
-                "Multivariate Analysis",
-                "Data Summary",
                 "Report Generation",
+                "Machine Leaning DashBoard",
             ]
         )
 
@@ -799,7 +804,7 @@ def main():
                 st.plotly_chart(pie_fig)
 
             with col7:
-                
+
                 boxcolumn = st.selectbox(
                     "Select a numerical column for outlier detection",
                     numerical_cols,
@@ -820,299 +825,25 @@ def main():
             #     fig = area_chart(df, ara_col, col2)
             #     st.plotly_chart(fig)
 
-            col9, col10, col11 = st.columns([0.45, 0.45, 0.45])
-        st.markdown(
-                    """
-                    <div style="
-                        text-align: center; 
-                        font-size: 26px; 
-                        font-family: Arial, sans-serif; 
-                        color: #ffffff; 
-                        margin-bottom: 20px;
-                    ">
-                        🔍 Correlation Heatmap
-                    </div>
-                    """,
-                    unsafe_allow_html=True,
-                )
-        fig = create_heatmap(df)
-        st.plotly_chart(fig)
-
-        # Tab 2: Relationships
-        with tabs[1]:
-            col1, col2 = st.columns(2)
-
-            with col1:
-                st.markdown('<div class="card">', unsafe_allow_html=True)
-                if numerical_cols and len(numerical_cols) >= 2:
-                    xcol = st.selectbox(
-                        "Select X-axis", numerical_cols, key="scatter_x"
-                    )
-                    ycol = st.selectbox(
-                        "Select Y-axis",
-                        numerical_cols,
-                        key="scatter_y",
-                        index=min(1, len(numerical_cols) - 1),
-                    )
-                    scatter_fig = create_scatter(df, xcol, ycol)
-                    st.plotly_chart(scatter_fig, use_container_width=True, key="chart4")
-                else:
-                    st.info("Need at least 2 numerical columns for a scatter plot")
-                st.markdown("</div>", unsafe_allow_html=True)
-
-            with col2:
-                st.markdown('<div class="card">', unsafe_allow_html=True)
-                if categorical_cols and numerical_cols:
-                    xcat = st.selectbox(
-                        "Select categorical column", categorical_cols, key="bar_x"
-                    )
-                    ynum = st.selectbox(
-                        "Select numerical column", numerical_cols, key="bar_y"
-                    )
-
-                    # Get top 10 categories if there are too many
-                    if df[xcat].nunique() > 10:
-                        top_cats = df[xcat].value_counts().nlargest(10).index
-                        filtered_df = df[df[xcat].isin(top_cats)]
-                        st.info(
-                            "Showing only top 10 categories for better visualization"
-                        )
-                    else:
-                        filtered_df = df
-
-                    bar_fig = create_bar_chart(filtered_df, xcat, ynum)
-                    st.plotly_chart(bar_fig, use_container_width=True, key="chart5")
-                else:
-                    st.info(
-                        "Need both categorical and numerical columns for a bar chart"
-                    )
-                st.markdown("</div>", unsafe_allow_html=True)
-
-            if len(numerical_cols) > 2:
-                st.markdown('<div class="card">', unsafe_allow_html=True)
-                st.subheader("Correlation Heatmap")
-                if st.checkbox("Show Correlation Heatmap"):
-                    corr_fig = create_heatmap(df[numerical_cols])
-                    st.plotly_chart(corr_fig, use_container_width=True, key="chart6")
-                st.markdown("</div>", unsafe_allow_html=True)
-
-        # Tab 3: Distributions
-        with tabs[2]:
-            col1, col2 = st.columns(2)
-
-            with col1:
-                st.markdown('<div class="card">', unsafe_allow_html=True)
-                if numerical_cols:
-                    hist_col = st.selectbox(
-                        "Select a column for histogram",
-                        numerical_cols,
-                        key="dist_histogram",
-                    )
-                    hist_fig = create_histogram(df, hist_col)
-                    st.plotly_chart(hist_fig, use_container_width=True, key="chart7")
-                else:
-                    st.info("No numerical columns available for histogram")
-                st.markdown("</div>", unsafe_allow_html=True)
-
-            with col2:
-                st.markdown('<div class="card">', unsafe_allow_html=True)
-                if categorical_cols and numerical_cols:
-                    x_violin = st.selectbox(
-                        "Select categorical column for violin plot",
-                        categorical_cols,
-                        key="violin_x",
-                    )
-                    y_violin = st.selectbox(
-                        "Select numerical column for violin plot",
-                        numerical_cols,
-                        key="violin_y",
-                    )
-
-                    # Get top 6 categories if there are too many
-                    if df[x_violin].nunique() > 6:
-                        top_cats_violin = df[x_violin].value_counts().nlargest(6).index
-                        filtered_df_violin = df[df[x_violin].isin(top_cats_violin)]
-                        st.info(
-                            "Showing only top 6 categories for better visualization"
-                        )
-                    else:
-                        filtered_df_violin = df
-
-                    violin_fig = create_violin_plot(
-                        filtered_df_violin, x_violin, y_violin
-                    )
-                    st.plotly_chart(violin_fig, use_container_width=True, key="chart8")
-                else:
-                    st.info(
-                        "Need both categorical and numerical columns for a violin plot"
-                    )
-                st.markdown("</div>", unsafe_allow_html=True)
-
-        # Tab 4: Advanced Visualizations
-        with tabs[3]:
-            col1, col2 = st.columns(2)
-
-            with col1:
-                st.markdown('<div class="card">', unsafe_allow_html=True)
-                if categorical_cols and numerical_cols and len(categorical_cols) >= 2:
-                    st.subheader("Treemap")
-                    path_cols = st.multiselect(
-                        "Select hierarchical categories (order matters)",
-                        categorical_cols,
-                        default=[categorical_cols[0]],
-                        key="treemap_path",
-                    )
-
-                    value_col = st.selectbox(
-                        "Select value column", numerical_cols, key="treemap_value"
-                    )
-
-                    if path_cols:
-                        # Limit categories to prevent overcrowding
-                        filtered_df_tree = df.copy()
-                        for col in path_cols:
-                            if filtered_df_tree[col].nunique() > 10:
-                                top_cats_tree = (
-                                    filtered_df_tree[col]
-                                    .value_counts()
-                                    .nlargest(10)
-                                    .index
-                                )
-                                filtered_df_tree = filtered_df_tree[
-                                    filtered_df_tree[col].isin(top_cats_tree)
-                                ]
-                                st.info(
-                                    f"Limited to top 10 categories for {col} to improve visualization"
-                                )
-
-                        treemap_fig = create_treemap(
-                            filtered_df_tree, path_cols, value_col
-                        )
-                        st.plotly_chart(
-                            treemap_fig, use_container_width=True, key="chart9"
-                        )
-                    else:
-                        st.info("Please select at least one category for the treemap")
-                else:
-                    st.info(
-                        "Need at least 2 categorical columns and 1 numerical column for a treemap"
-                    )
-                st.markdown("</div>", unsafe_allow_html=True)
-
-            with col2:
-                st.markdown('<div class="card">', unsafe_allow_html=True)
-                if numerical_cols and len(numerical_cols) >= 3:
-                    st.subheader("Bubble Chart")
-                    x_bubble = st.selectbox(
-                        "Select X-axis", numerical_cols, key="bubble_x"
-                    )
-                    y_bubble = st.selectbox(
-                        "Select Y-axis",
-                        numerical_cols,
-                        key="bubble_y",
-                        index=min(1, len(numerical_cols) - 1),
-                    )
-                    size_bubble = st.selectbox(
-                        "Select Size dimension",
-                        numerical_cols,
-                        key="bubble_size",
-                        index=min(2, len(numerical_cols) - 1),
-                    )
-
-                    bubble_fig = create_bubble_chart(
-                        df, x_bubble, y_bubble, size_bubble
-                    )
-                    st.plotly_chart(bubble_fig, use_container_width=True, key="chart10")
-                else:
-                    st.info("Need at least 3 numerical columns for a bubble chart")
-                st.markdown("</div>", unsafe_allow_html=True)
-
-            if date_cols or (
-                all_cols and st.checkbox("Use a categorical/text column as timeline")
-            ):
-                st.markdown('<div class="card">', unsafe_allow_html=True)
-                st.subheader("Timeline / Trend Analysis")
-
-                timeline_cols = date_cols.copy() if date_cols else []
-                if not timeline_cols:
-                    timeline_cols = all_cols
-
-                x_line = st.selectbox(
-                    "Select timeline column", timeline_cols, key="line_x"
-                )
-                y_line = st.selectbox(
-                    "Select value column", numerical_cols, key="line_y"
-                )
-                group_line = None
-
-                if categorical_cols:
-                    use_group = st.checkbox("Group by category")
-                    if use_group:
-                        group_line = st.selectbox(
-                            "Select grouping column", categorical_cols, key="line_group"
-                        )
-
-                line_fig = create_line_chart(df, x_line, y_line, group_line)
-                st.plotly_chart(line_fig, use_container_width=True, key="chart11")
-                st.markdown("</div>", unsafe_allow_html=True)
-
-        # Tab 5: Data Summary
-        with tabs[4]:
-            st.markdown('<div class="card">', unsafe_allow_html=True)
-            st.subheader("Data Summary")
-            summary_df = get_data_summary(df)
-            st.dataframe(summary_df, height=400)
-
-            if numerical_cols:
-                show_correlation = st.checkbox("Show Correlation Matrix")
-                if show_correlation:
-                    corr_matrix = df[numerical_cols].corr().round(2)
-                    st.dataframe(corr_matrix, height=400)
-            st.markdown("</div>", unsafe_allow_html=True)
-
-            col1, col2 = st.columns(2)
-
-            with col1:
-                st.markdown('<div class="card">', unsafe_allow_html=True)
-                st.subheader("Missing Values")
-                missing_df = pd.DataFrame(
-                    {
-                        "Column": df.columns,
-                        "Missing Values": df.isnull().sum().values,
-                        "Percentage": (df.isnull().sum() / len(df) * 100)
-                        .round(2)
-                        .values,
-                    }
-                )
-                st.dataframe(missing_df, height=300)
-                st.markdown("</div>", unsafe_allow_html=True)
-
-            with col2:
-                st.markdown('<div class="card">', unsafe_allow_html=True)
-                st.subheader("Categorical Value Counts")
-                if categorical_cols:
-                    cat_col = st.selectbox(
-                        "Select categorical column", categorical_cols, key="cat_counts"
-                    )
-                    value_counts = df[cat_col].value_counts()
-
-                    # Limit to top 10 if there are too many categories
-                    if len(value_counts) > 10:
-                        value_counts = value_counts.head(10)
-                        st.info("Showing top 10 categories only")
-
-                    st.dataframe(
-                        value_counts.reset_index().rename(
-                            columns={"index": cat_col, cat_col: "Count"}
-                        ),
-                        height=300,
-                    )
-                else:
-                    st.info("No categorical columns available")
-                st.markdown("</div>", unsafe_allow_html=True)
+            st.markdown(
+                """
+                        <div style="
+                            text-align: center; 
+                            font-size: 26px; 
+                            font-family: Arial, sans-serif; 
+                            color: #ffffff; 
+                            margin-bottom: 20px;
+                        ">
+                            🔍 Correlation Heatmap
+                        </div>
+                        """,
+                unsafe_allow_html=True,
+            )
+            fig = create_heatmap(df)
+            st.plotly_chart(fig)
 
         # Tab 6: Report Generation (New Tab)
-        with tabs[5]:
+        with tabs[1]:
             st.markdown(
                 '<h2 class="section-header">Generate Analysis Report</h2>',
                 unsafe_allow_html=True,
@@ -1131,43 +862,57 @@ def main():
             if report_type == "Create using AutoEDA":
                 st.markdown(
                     """
-                <div class="card">
-                    <h3>AutoEDA Report</h3>
-                    <p>This report uses pandas-profiling (ydata-profiling) to generate a comprehensive analysis of your data, including:</p>
-                    <ul>
-                        <li>Statistical analysis of all variables</li>
-                        <li>Correlation analysis and principal component analysis</li>
-                        <li>Missing values analysis</li>
-                        <li>Distribution visualizations</li>
-                        <li>Detailed variable information</li>
-                    </ul>
-                </div>
-                """,
+                    <style>
+                        .card {
+                            background-color: #f9f9f9;
+                            border-radius: 8px;
+                            padding: 20px;
+                            margin: 20px 0;
+                            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+                        }
+                        .card h3 {
+                            color: #2c3e50;
+                            margin-bottom: 10px;
+                        }
+                        .card p {
+                            font-size: 16px;
+                            color: #7f8c8d;
+                        }
+                    </style>
+                    <div class="card">
+                        <h3>AutoEDA Report</h3>
+                        <p>This report automatically generates an in-depth Exploratory Data Analysis (EDA) with:</p>
+                        <ul>
+                            <li>Variable distributions</li>
+                            <li>Missing values analysis</li>
+                            <li>Correlation heatmaps</li>
+                            <li>Data types and unique values</li>
+                            <li>Interactive HTML output</li>
+                        </ul>
+                    </div>
+                    """,
                     unsafe_allow_html=True,
                 )
 
                 if st.button("Generate AutoEDA Report"):
                     with st.spinner(
-                        "Generating comprehensive report... This may take a minute for larger datasets."
+                        "Generating detailed AutoEDA report... Please wait."
                     ):
                         try:
-                            report_data = generate_autoeda_report(df)
+                            # Generate the AutoEDA report
+                            report_html = generate_autoeda_report(df)
 
-                            # Show preview in an expander
+                            # Display the report preview inside an expander
                             with st.expander("Report Preview (Click to expand)"):
-                                st.components.v1.html(report_data["html"], height=600)
+                                st.components.v1.html(
+                                    report_html, height=800, scrolling=True
+                                )
 
-                            # Download options
+                            # Provide the download link
                             st.markdown("### Download Options")
                             st.markdown(
-                                get_download_link(
-                                    report_data["html"], "autoeda_report", "html"
-                                ),
-                                unsafe_allow_html=True,
-                            )
-                            st.markdown(
-                                get_download_link(
-                                    report_data["html"], "autoeda_report", "markdown"
+                                get_download_link_autoeda(
+                                    report_html, "autoeda_report", "html"
                                 ),
                                 unsafe_allow_html=True,
                             )
@@ -1177,36 +922,65 @@ def main():
             elif report_type == "Create using Sweetviz":
                 st.markdown(
                     """
-                <div class="card">
-                    <h3>Sweetviz Report</h3>
-                    <p>This report uses Sweetviz to create a beautiful, interactive EDA report featuring:</p>
-                    <ul>
-                        <li>Automated visualization of relationships</li>
-                        <li>Comparative analysis capabilities</li>
-                        <li>Summary statistics with visual cues</li>
-                        <li>Target feature analysis</li>
-                        <li>Interactive HTML output</li>
-                    </ul>
-                </div>
-                """,
+                        <style>
+                            .card {
+                                background-color: #f9f9f9;
+                                border-radius: 8px;
+                                padding: 20px;
+                                margin: 20px 0;
+                                box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+                            }
+                            .card h3 {
+                                color: #2c3e50;
+                                margin-bottom: 10px;
+                            }
+                            .card p {
+                                font-size: 16px;
+                                color: #7f8c8d;
+                            }
+                            .card ul {
+                                list-style: none;
+                                padding-left: 0;
+                            }
+                            .card ul li {
+                                background: url("data:image/svg+xml,%3Csvg width='6' height='6' xmlns='http://www.w3.org/2000/svg'%3E%3Ccircle cx='3' cy='3' r='3' fill='%23343a40'/%3E%3C/svg%3E") left center no-repeat;
+                                padding-left: 10px;
+                                margin-bottom: 5px;
+                                color: #34495e;
+                            }
+                        </style>
+                        <div class="card">
+                            <h3>Sweetviz Report</h3>
+                            <p>This report uses Sweetviz to create a beautiful, interactive EDA report featuring:</p>
+                            <ul>
+                                <li>Automated visualization of relationships</li>
+                                <li>Comparative analysis capabilities</li>
+                                <li>Summary statistics with visual cues</li>
+                                <li>Target feature analysis</li>
+                                <li>Interactive HTML output</li>
+                            </ul>
+                        </div>
+                        """,
                     unsafe_allow_html=True,
                 )
 
-                if st.button("Generate Sweetviz Report"):
+                # Button to trigger report generation
+                if st.button("Generate Sweetviz Report", key="sweetviz"):
                     with st.spinner(
                         "Generating beautiful interactive report... This may take a minute."
                     ):
                         try:
+                            # Generate the report using the helper function
                             report_data = generate_sweetviz_report(df)
-
-                            # Show preview in an expander
+                            # Display the full report preview with increased height and scrolling enabled
                             with st.expander("Report Preview (Click to expand)"):
-                                st.components.v1.html(report_data["html"], height=600)
-
-                            # Download options
+                                st.components.v1.html(
+                                    report_data["html"], height=800, scrolling=True
+                                )
+                            # Provide a download link for the report
                             st.markdown("### Download Options")
                             st.markdown(
-                                get_download_link(
+                                get_download_link_sweet(
                                     report_data["html"], "sweetviz_report", "html"
                                 ),
                                 unsafe_allow_html=True,
@@ -1287,6 +1061,8 @@ def main():
                             except Exception as e:
                                 st.error(f"Error generating report: {e}")
 
+        with tabs[2]:
+            Machine_Learning()
     else:
         # Welcome screen when no data is uploaded
         st.markdown(

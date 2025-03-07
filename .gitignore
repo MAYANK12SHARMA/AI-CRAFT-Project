@@ -45,3 +45,6 @@ __pycache__/
 
 # Ignore Env specific files
 env/
+
+
+Glatu/
