@@ -856,13 +856,19 @@ def Machine_Learning():
                         
                     # One Hot Encoding
                     elif encoding == "One Hot Encoding":
+                        # Append the process details to the session state log
                         st.session_state.all_the_process += f"""
-    # One Hot Encoding
-    df = pd.get_dummies(df, columns={enc_feat})
-    \n """
+                        # One Hot Encoding
+                        df = pd.get_dummies(df, columns={enc_feat})
+                        \n
+                        """
+
+                        # Apply one hot encoding to the dataframe
                         df = pd.get_dummies(df, columns=enc_feat)
                         st.session_state['df'] = df
-                        st.success(f"The Categories of the features **`{enc_feat}`** have been encoded using One Hot Encoding.")
+
+                        # Notify the user
+                        st.success(f"The categories of the features **`{enc_feat}`** have been encoded using One Hot Encoding.")
                     elif encoding == "Label Encoding":
                         label_encoders = {}
                         for feature in enc_feat:
