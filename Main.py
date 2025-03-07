@@ -17,6 +17,8 @@ from sweet import generate_sweetviz_report, get_download_link_sweet
 import numpy as np
 from ML import Machine_Learning
 
+if 'uploading_way' not in st.session_state:
+        st.session_state['uploading_way'] = None
 
 def generate_autoeda_report(df):
     """
